@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ピカソの名前ならべ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* Layout: one column — score strip, the name row (field), the table of players, the active player's face-down hand */
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+button,input,select{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+body{-webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#e6ebf2; --surface:#f7f9fc; --ink:#14223d; --muted:#5b6782;
+  --blue:#1f3d73; --ochre:#c9861d; --rose:#cf6f72; --line:#c3cbd9;
+  --ok:#2f7d52; --bad:#c2413f;
+  --display:"Dela Gothic One","Hiragino Kaku Gothic StdN",sans-serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1729; --surface:#17233b; --ink:#e7ecf5; --muted:#99a5bd;
+  --blue:#2c5296; --ochre:#e4a640; --rose:#de8487; --line:#2c3a57;
+  --ok:#5cbf86; --bad:#ef6b68; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1729; --surface:#17233b; --ink:#e7ecf5; --muted:#99a5bd;
+  --blue:#2c5296; --ochre:#e4a640; --rose:#de8487; --line:#2c3a57;
+  --ok:#5cbf86; --bad:#ef6b68; color-scheme:dark}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:980px;margin:0 auto;padding-block:24px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,5vw,38px);line-height:1.15;margin:0;text-wrap:balance}
+h1 span{color:var(--rose)}
+h2{font-family:var(--display);font-weight:400;font-size:20px;margin:0}
+.lead{margin:4px 0 0;color:var(--muted);max-width:62ch}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 12px;text-align:center;min-width:64px}
+.stat b{display:block;font-family:var(--display);font-weight:400;font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.stat small{font-size:11px;letter-spacing:.08em;color:var(--muted)}
+.life b{color:var(--rose)}
+.label{font-size:12px;letter-spacing:.12em;color:var(--muted);margin:0 0 8px;font-weight:700}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.note{color:var(--muted);font-size:13px;margin:0}
+
+/* setup */
+.setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.rules{margin:0;padding-left:1.2em;max-width:62ch}
+.rules li{margin:2px 0}
+input,select{font:inherit;font-size:16px;min-height:44px;padding:7px 10px;border-radius:6px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
+input:focus-visible,select:focus-visible{outline:3px solid var(--ochre);outline-offset:1px}
+#codeIn{text-transform:uppercase;letter-spacing:.2em;width:8em}
+
+/* field */
+.board{display:flex;flex-wrap:wrap;gap:6px 4px;align-items:center}
+.slot{height:52px;min-width:44px;padding:0 10px;display:flex;align-items:center;justify-content:center;
+  border-radius:6px;font-weight:700;font-size:15px;white-space:nowrap;border:1.5px dashed var(--line);color:var(--muted)}
+.slot.filled{border:1.5px solid var(--blue);background:var(--surface);color:var(--ink)}
+.slot.skip{border:1.5px solid var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,transparent);text-decoration:line-through}
+.slot.next{border:2px solid var(--ochre);color:var(--ochre)}
+.slot.pop{animation:pop .4s ease-out}
+.dot{color:var(--rose);font-weight:700;font-size:18px;padding:0 1px}
+@keyframes pop{0%{transform:scale(.7)}70%{transform:scale(1.08)}100%{transform:scale(1)}}
+.log{font-size:14px;min-height:1.6em}
+.log b{color:var(--ok)} .log.bad b{color:var(--bad)}
+
+/* players */
+.players{display:flex;flex-wrap:wrap;gap:8px}
+.seat{font:inherit;min-height:52px;display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:8px 12px;border-radius:8px;border:1.5px solid var(--line);
+  background:var(--surface);color:var(--ink);min-width:104px;text-align:left}
+button.seat{cursor:pointer}
+button.seat:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
+.seat .nm{font-weight:700;font-size:14px}
+.seat .ct{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.seat.active{border-color:var(--blue);background:var(--blue);color:#fff}
+.seat.active .ct{color:rgba(255,255,255,.8)}
+.seat.mine:not(.active){border-color:var(--blue)}
+.seat.empty{border-style:dashed}
+.seat.other{opacity:.85}
+
+/* hand */
+.handHead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
+.hand{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:12px}
+.slotCard{display:flex;flex-direction:column;gap:6px;min-width:0}
+.card{aspect-ratio:3/4;width:100%;max-width:100%;perspective:600px;border:0;padding:0;background:none;cursor:pointer;font:inherit;color:inherit}
+.card:focus-visible{outline:3px solid var(--ochre);outline-offset:3px;border-radius:8px}
+.inner{position:relative;width:100%;height:100%;transition:transform .35s ease;transform-style:preserve-3d}
+.card.up .inner{transform:rotateY(180deg)}
+.face,.back{position:absolute;inset:0;border-radius:8px;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.back{border:2px solid var(--surface);box-shadow:0 1px 0 var(--line),0 3px 8px rgba(10,20,40,.15);
+  background:
+    linear-gradient(135deg,transparent 48%,var(--ochre) 48% 54%,transparent 54%),
+    conic-gradient(from 30deg at 35% 40%,var(--blue) 0 90deg,var(--rose) 90deg 150deg,#24467f 150deg 260deg,var(--ochre) 260deg 290deg,var(--blue) 290deg)}
+.back::after{content:"";position:absolute;left:50%;top:50%;width:26%;aspect-ratio:1;transform:translate(-50%,-50%) rotate(45deg);
+  border:2px solid rgba(255,255,255,.75);border-radius:2px}
+.face{transform:rotateY(180deg);background:var(--surface);border:2px solid var(--ochre);display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:14px;line-height:1.2;text-align:center;padding:4px;word-break:keep-all;overflow-wrap:anywhere}
+.empty-hand{color:var(--muted);padding:18px;border:1.5px dashed var(--line);border-radius:8px;text-align:center}
+
+button.act{font:inherit;font-weight:700;font-size:15px;border-radius:8px;padding:10px 16px;min-height:44px;cursor:pointer;border:1.5px solid var(--blue);background:var(--blue);color:#fff}
+button.act.sm{font-size:14px;padding:8px 6px;width:100%;min-height:40px}
+button.act.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+button.act.warn{background:var(--ochre);border-color:var(--ochre);color:#1a1205}
+button.act:disabled{opacity:.35;cursor:not-allowed}
+button.act:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
+.code{font-family:var(--display);font-size:24px;letter-spacing:.2em;color:var(--blue);user-select:all}
+.banner{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+
+.result{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));z-index:20}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px;max-width:560px;width:100%;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px rgba(10,20,40,.25)}
+.panel h2{font-size:26px}
+.full{font-weight:700;line-height:1.9;margin:0}
+.full .dot{font-size:15px}
+@media (max-width:480px){
+  .wrap{gap:18px;padding-block:16px 40px}
+  .hand{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .slot{height:44px;padding:0 7px;font-size:14px}
+  .dot{font-size:15px}
+  .seat{min-width:0;flex:1 1 calc(50% - 8px)}
+  .stat{min-width:56px;padding:4px 10px}
+  .box{padding:14px}
+  .row>input{flex:1 1 140px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>ピカソの<span>名前</span>ならべ</h1>
+      <p class="lead">ピカソの本名21語をみんなに配ります。札の中身は口に出さず、表情や間合いを読んで「次は自分だ」と思った人が出していく協力ゲーム。</p>
+    </div>
+    <div class="stats" id="stats" hidden>
+      <div class="stat"><b id="sDone">0/21</b><small>場</small></div>
+      <div class="stat life"><b id="sLife">♥♥♥</b><small>ライフ</small></div>
+    </div>
+  </header>
+
+  <!-- setup -->
+  <section id="setup" class="setup">
+    <div class="box">
+      <h2>あそびかた</h2>
+      <ol class="rules">
+        <li>ピカソの本名を「・」で区切った21枚の札を、参加者に配ります。</li>
+        <li>札は伏せてあり、自分だけがめくって確認できます。</li>
+        <li>札の言葉を言ったりヒントを出したりは禁止。顔色と雰囲気だけで、名前の先頭から順に場へ出します。</li>
+        <li>出す順番は決まっていません。いつでも誰でも出せます。</li>
+        <li>出した札より前の言葉を誰かが持っていたら、その札は飛ばされてライフが1つずつ減ります。</li>
+        <li>ライフが残ったまま21語そろえば成功。</li>
+      </ol>
+    </div>
+    <div class="box">
+      <h2>この端末でみんなで</h2>
+      <p class="note">1台を回して遊びます。「参加者」のボタンで手札を切り替えます。</p>
+      <div class="row"><label for="nLocal">人数</label><select id="nLocal"></select></div>
+      <button class="act" id="startLocal">配って始める</button>
+    </div>
+    <div class="box">
+      <h2>通信プレイ</h2>
+      <p class="note">このファイルを開いた人同士で、それぞれの端末からつながります。サインイン不要。</p>
+      <div class="row"><label for="nick">ニックネーム</label><input id="nick" maxlength="10" placeholder="例：ドラ"></div>
+      <div class="row"><label for="nOnline">人数</label><select id="nOnline"></select><button class="act" id="create">部屋をつくる</button></div>
+      <div class="row"><label for="codeIn">部屋コード</label><input id="codeIn" maxlength="4" autocomplete="off"><button class="act ghost" id="join">参加する</button></div>
+      <p class="note" id="netMsg"></p>
+    </div>
+  </section>
+
+  <!-- game -->
+  <section id="game" hidden>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div class="banner" id="roomBar" hidden>
+        <div><span class="note">部屋コード</span> <span class="code" id="roomCode"></span></div>
+        <p class="note" id="roomMsg" style="flex:1 1 220px;min-width:0"></p>
+        <div class="row">
+          <button class="act ghost" id="inviteBtn" hidden>招待リンクをコピー</button>
+          <button class="act" id="startBtn" hidden>ゲーム開始</button>
+          <button class="act ghost" id="leaveBtn">部屋を出る</button>
+        </div>
+      </div>
+
+      <section>
+        <p class="label">場 ── ピカソの本名（全21語）</p>
+        <div class="board" id="board"></div>
+        <p class="log" id="log" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <p class="label">参加者（押すと手札を切り替え）</p>
+        <div class="players" id="players"></div>
+      </section>
+
+      <section>
+        <div class="handHead">
+          <h2 id="handTitle">手札</h2>
+          <div class="row">
+            <button class="act ghost" id="hideAll">全部伏せる</button>
+            <button class="act ghost" id="redeal">配り直す</button>
+          </div>
+        </div>
+        <div class="hand" id="hand"></div>
+      </section>
+    </div>
+  </section>
+</div>
+
+<div class="result" id="result" hidden>
+  <div class="panel">
+    <h2 id="rTitle">完成！</h2>
+    <p id="rText" class="note"></p>
+    <p class="full" id="rFull"></p>
+    <p class="note">1881年スペイン・マラガ生まれ。家族や聖人、親戚の名前が詰め込まれています。</p>
+    <div class="row"><button class="act" id="again">もう一度</button><button class="act ghost" id="closeR">場を見る</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</body>
+</html>
+<script>
+const NAME=["パブロ","ディエゴ","ホセ","フランシスコ","デ","パウラ","ホアン","ネポムセーノ","マリア","デ","ロス","レメディオス","クリスピン","クリスピアノ","デ","ラ","サンティシマ","トリニダード","ルイス","イ","ピカソ"];
+const LIVES=3, MAXP=7;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+for(const sel of [$('nLocal'),$('nOnline')]){for(let n=2;n<=MAXP;n++){const o=document.createElement('option');o.value=n;o.textContent=n+'人';sel.appendChild(o)}sel.value='4'}
+$('nick').value=ls.get('picasso-nick')||'';
+
+/* ---------- state ---------- */
+let mode=null;            // 'local' | 'online'
+let room=null;            // {n,hands:{i:[ids]},seats:{i:{uid,name}},status,round,lives}
+let plays=[];             // [{seat,card,t,round,id}]
+let me=null;              // my uid
+let code=null;
+let active=null;          // seat index shown in hand area
+let faceUp=new Set();     // card ids currently flipped by this viewer
+let armed=null, armTimer=null;
+let lastDone=0, resultShown=false;
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function deal(n){
+  const ids=shuffle(NAME.map((_,i)=>i));const h={};
+  for(let s=0;s<n;s++)h[s]=[];
+  ids.forEach((id,k)=>h[k%n].push(id));
+  for(let s=0;s<n;s++)h[s].sort(()=>Math.random()-.5);
+  return h;
+}
+
+/* derive the whole game from the deal + the ordered list of plays */
+function derive(){
+  const n=room.n, hands={};
+  for(let s=0;s<n;s++)hands[s]=[...(room.hands[s]||[])];
+  const field=[]; let next=0, lives=room.lives??LIVES, last=null, over=null;
+  const ps=plays.filter(p=>p.round===room.round).sort((a,b)=>(a.t-b.t)||String(a.id).localeCompare(String(b.id)));
+  for(const p of ps){
+    if(over)break;
+    const h=hands[p.seat];if(!h)continue;
+    const k=h.indexOf(p.card);if(k<0)continue;
+    h.splice(k,1);
+    const w=NAME[p.card];
+    if(NAME[next]===w){field[next]={seat:p.seat};last={ok:true,seat:p.seat,w};next++}
+    else{
+      let q=-1;for(let i=next;i<NAME.length;i++)if(NAME[i]===w){q=i;break}
+      if(q<0)continue;
+      const skipped=[];
+      for(let i=next;i<q;i++){
+        let holder=null;
+        for(let s=0;s<n&&holder===null;s++){const j=hands[s].indexOf(i);if(j>=0){hands[s].splice(j,1);holder=s}}
+        for(let s=0;s<n&&holder===null;s++){const j=hands[s].findIndex(c=>NAME[c]===NAME[i]);if(j>=0){hands[s].splice(j,1);holder=s}}
+        field[i]={seat:holder,skip:true};skipped.push({w:NAME[i],seat:holder});lives--;
+      }
+      field[q]={seat:p.seat};next=q+1;
+      last={ok:false,seat:p.seat,w,skipped};
+    }
+    if(lives<=0)over='lose';else if(next>=NAME.length)over='win';
+  }
+  return {hands,field,next,lives:Math.max(0,lives),last,over};
+}
+
+function seatName(i){
+  const s=room.seats&&room.seats[i];
+  if(mode==='online')return s&&s.name?s.name:'空席'+(i+1);
+  return '参加者'+(i+1);
+}
+function mySeats(){
+  if(mode==='local')return [...Array(room.n).keys()];
+  return [...Array(room.n).keys()].filter(i=>room.seats&&room.seats[i]&&room.seats[i].uid===me);
+}
+
+/* ---------- render ---------- */
+function render(){
+  if(!room)return;
+  const g=derive();
+  $('stats').hidden=false;
+  $('sDone').textContent=g.next+'/'+NAME.length;
+  $('sLife').textContent='♥'.repeat(g.lives)+'♡'.repeat(Math.max(0,LIVES-g.lives));
+
+  // field
+  const b=$('board');b.innerHTML='';
+  NAME.forEach((w,i)=>{
+    if(i>0){const d=document.createElement('span');d.className='dot';d.textContent='・';d.setAttribute('aria-hidden','true');b.appendChild(d)}
+    const f=g.field[i],el=document.createElement('div');
+    el.className='slot'+(f?(f.skip?' skip':' filled'):'')+(!f&&i===g.next&&!g.over?' next':'')+(f&&i>=lastDone&&i<g.next?' pop':'');
+    el.textContent=f||g.over?w:'？';
+    if(f)el.title=(f.skip?'飛ばされた：':'出した人：')+(f.seat!=null?seatName(f.seat):'');
+    b.appendChild(el);
+  });
+  lastDone=g.next;
+
+  // log
+  const lg=$('log');
+  if(!g.last){lg.className='log';lg.textContent=room.status==='wait'?'全員そろったら「ゲーム開始」を押してください。':'先頭は「パブロ」。持っている人は…？'}
+  else if(g.last.ok){lg.className='log';lg.innerHTML='<b>成功！</b> '+esc(seatName(g.last.seat))+'が「'+esc(g.last.w)+'」を出しました。'}
+  else{lg.className='log bad';lg.innerHTML='<b>ミス…</b> '+esc(seatName(g.last.seat))+'が「'+esc(g.last.w)+'」を出し、'+g.last.skipped.map(s=>esc(s.w)+(s.seat!=null?'（'+esc(seatName(s.seat))+'）':'')).join('、')+'が飛ばされました。'}
+
+  // players
+  const mine=mySeats();
+  if(active===null||(!mine.includes(active)))active=mine.length?mine[0]:null;
+  const pl=$('players');pl.innerHTML='';
+  for(let i=0;i<room.n;i++){
+    const isMine=mine.includes(i), taken=mode==='online'&&room.seats&&room.seats[i];
+    const el=document.createElement(isMine||(mode==='online'&&!taken)?'button':'div');
+    el.className='seat'+(i===active?' active':'')+(isMine?' mine':' other')+(mode==='online'&&!taken?' empty':'');
+    const cnt=g.hands[i].length;
+    el.innerHTML='<span class="nm">'+esc(seatName(i))+'</span><span class="ct">'+(mode==='online'&&!taken?'押して座る':'手札 '+cnt+'枚'+(isMine&&mode==='online'?'・あなた':''))+'</span>';
+    if(el.tagName==='BUTTON'){
+      el.type='button';el.id='seat'+i;
+      el.addEventListener('click',()=>isMine?switchTo(i):sit(i));
+    }
+    pl.appendChild(el);
+  }
+
+  // hand
+  const hd=$('hand');hd.innerHTML='';
+  if(active===null){
+    $('handTitle').textContent='手札';
+    hd.innerHTML='<div class="empty-hand" style="grid-column:1/-1">空いている席を押して座ると、手札が配られます。</div>';
+  }else{
+    $('handTitle').textContent=seatName(active)+'の手札';
+    const cards=g.hands[active];
+    if(!cards.length)hd.innerHTML='<div class="empty-hand" style="grid-column:1/-1">手札はもうありません。ほかの人の様子を見守ろう。</div>';
+    const canPlay=room.status==='play'&&!g.over;
+    cards.forEach(id=>{
+      const wrap=document.createElement('div');wrap.className='slotCard';
+      const up=faceUp.has(id);
+      const c=document.createElement('button');c.type='button';c.id='card'+id;
+      c.className='card'+(up?' up':'');
+      c.setAttribute('aria-label',up?NAME[id]+'（タップで伏せる）':'伏せ札（タップでめくる）');
+      c.innerHTML='<div class="inner"><div class="back"></div><div class="face">'+NAME[id]+'</div></div>';
+      c.addEventListener('click',()=>{faceUp.has(id)?faceUp.delete(id):faceUp.add(id);c.classList.toggle('up');c.setAttribute('aria-label',faceUp.has(id)?NAME[id]+'（タップで伏せる）':'伏せ札（タップでめくる）')});
+      const p=document.createElement('button');p.type='button';p.id='play'+id;
+      p.className='act sm'+(armed===id?' warn':'');p.textContent=armed===id?'本当に出す？':'場に出す';
+      p.disabled=!canPlay;
+      p.addEventListener('click',()=>playClick(active,id));
+      wrap.append(c,p);hd.appendChild(wrap);
+    });
+  }
+  $('redeal').hidden=mode==='online'&&room.status==='wait';
+
+  // room bar
+  if(mode==='online'){
+    $('roomBar').hidden=false;$('roomCode').textContent=code;
+    const seated=Object.values(room.seats||{}).filter(Boolean).length;
+    $('startBtn').hidden=room.status!=='wait';
+    $('inviteBtn').hidden=!canLink;
+    $('roomMsg').textContent=room.status==='wait'?((isHost?'この画面は閉じないでください（あなたがホストです）。':'')+'部屋コードを友だちに伝えよう。着席 '+seated+'/'+room.n+'人'):'プレイ中。札の言葉は言わないこと！';
+  }else $('roomBar').hidden=true;
+
+  // result
+  if(g.over&&!resultShown){
+    resultShown=true;
+    $('rTitle').textContent=g.over==='win'?'完成！':'ライフがなくなった…';
+    $('rText').textContent=g.over==='win'?('ライフ'+g.lives+'つを残してピカソの本名がそろいました。'):(g.next+'語目まで進みました。正解はこちら。');
+    $('rFull').innerHTML=NAME.map(esc).join('<span class="dot">・</span>');
+    $('result').hidden=false;$('again').focus();
+  }
+  if(!g.over)resultShown=false;
+}
+
+function switchTo(i){
+  if(i===active)return;
+  faceUp.clear();disarm();active=i;render();
+}
+function disarm(){armed=null;clearTimeout(armTimer)}
+function playClick(seat,id){
+  if(armed!==id){disarm();armed=id;armTimer=setTimeout(()=>{armed=null;render()},3000);render();return}
+  disarm();faceUp.delete(id);
+  const p={seat,card:id,t:Date.now(),round:room.round};
+  if(mode==='local'){p.id=Math.random().toString(36).slice(2);plays.push(p);render()}
+  else send({type:'play',seat,card:id,round:room.round});
+}
+function flash(t){const lg=$('log');lg.className='log bad';lg.textContent=t}
+
+/* ---------- local ---------- */
+$('startLocal').addEventListener('click',()=>{
+  keepAwake();
+  mode='local';const n=+$('nLocal').value;
+  room={n,hands:deal(n),seats:{},status:'play',round:1,lives:LIVES};plays=[];active=0;
+  showGame();
+});
+
+function showGame(){faceUp.clear();disarm();lastDone=0;resultShown=false;$('setup').hidden=true;$('game').hidden=false;$('result').hidden=true;render()}
+
+$('hideAll').addEventListener('click',()=>{faceUp.clear();render()});
+let redealArmed=false,redealTimer=null;
+$('redeal').addEventListener('click',()=>{
+  if(!redealArmed){redealArmed=true;$('redeal').textContent='本当に配り直す？';$('redeal').classList.add('warn');redealTimer=setTimeout(resetRedeal,3000);return}
+  resetRedeal();newRound();
+});
+function resetRedeal(){redealArmed=false;clearTimeout(redealTimer);$('redeal').textContent='配り直す';$('redeal').classList.remove('warn')}
+function newRound(){
+  faceUp.clear();disarm();lastDone=0;resultShown=false;$('result').hidden=true;
+  const next={hands:deal(room.n),round:(room.round||1)+1,status:'play',lives:LIVES};
+  if(mode==='local'){Object.assign(room,next);plays=[];render()}
+  else send({type:'redeal'});
+}
+$('again').addEventListener('click',newRound);
+$('closeR').addEventListener('click',()=>{$('result').hidden=true});
+
+/* ---------- online (PeerJS, host-authoritative) ---------- */
+const PREFIX='picasso-narabe-v1-';
+let peer=null, isHost=false, conns=[], hostConn=null;
+const netMsg=t=>{$('netMsg').textContent=t};
+me=ls.get('picasso-uid')||('g'+Math.random().toString(36).slice(2,10));ls.set('picasso-uid',me);
+function nick(){const v=$('nick').value.trim().slice(0,10);if(v)ls.set('picasso-nick',v);return v}
+function hasPeer(){if(typeof Peer==='undefined'){netMsg('通信ライブラリを読み込めませんでした。インターネットにつながっているか確認してください。');return false}return true}
+
+function broadcast(){const msg={type:'state',room,plays};conns.forEach(c=>{try{c.open&&c.send(msg)}catch(e){}})}
+function hostApply(msg,from){
+  if(msg.type==='sit'){
+    if(!room.seats[msg.seat]||room.seats[msg.seat].uid===msg.uid)room.seats[msg.seat]={uid:msg.uid,name:String(msg.name||'').slice(0,10)||('参加者'+(+msg.seat+1))};
+  }else if(msg.type==='play'){
+    if(room.status!=='play'||msg.round!==room.round)return;
+    const s=room.seats[msg.seat];if(!s||s.uid!==msg.uid)return;
+    plays.push({seat:+msg.seat,card:+msg.card,t:Date.now(),round:room.round,id:Math.random().toString(36).slice(2)});
+  }else if(msg.type==='start'){room.status='play'}
+  else if(msg.type==='redeal'){Object.assign(room,{hands:deal(room.n),round:room.round+1,status:'play',lives:LIVES});plays=[];onNewRound()}
+  render();broadcast();
+}
+function send(msg){
+  msg.uid=me;
+  if(isHost)hostApply(msg);
+  else if(hostConn&&hostConn.open)hostConn.send(msg);
+  else flash('ホストとの接続が切れています。');
+}
+function onNewRound(){faceUp.clear();disarm();lastDone=0;resultShown=false;$('result').hidden=true}
+
+$('create').addEventListener('click',()=>{
+  if(!nick()){netMsg('ニックネームを入れてください。');$('nick').focus();return}
+  if(!hasPeer())return;
+  netMsg('部屋をつくっています…');
+  const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const c=[...Array(4)].map(()=>A[Math.floor(Math.random()*A.length)]).join('');
+  const n=+$('nOnline').value;
+  peer=new Peer(PREFIX+c);
+  peer.on('open',()=>{
+    isHost=true;mode='online';code=c;plays=[];active=0;
+    room={n,hands:deal(n),seats:{0:{uid:me,name:nick()}},status:'wait',round:1,lives:LIVES};
+    netMsg('');showGame();keepAwake();
+  });
+  peer.on('disconnected',()=>{setTimeout(()=>{if(peer&&!peer.destroyed&&peer.disconnected)try{peer.reconnect()}catch(e){}},1000)});
+  peer.on('connection',conn=>{
+    conns.push(conn);
+    conn.on('open',()=>{conn.send({type:'state',room,plays})});
+    conn.on('data',m=>{if(m&&typeof m==='object')hostApply(m)});
+    conn.on('close',()=>{conns=conns.filter(x=>x!==conn)});
+  });
+  peer.on('error',e=>{netMsg(e.type==='unavailable-id'?'コードが重なりました。もう一度押してください。':'通信エラー（'+e.type+'）');if(!room)try{peer.destroy()}catch(_){}});
+});
+
+$('join').addEventListener('click',()=>{
+  const c=$('codeIn').value.trim().toUpperCase();
+  if(!nick()){netMsg('ニックネームを入れてください。');$('nick').focus();return}
+  if(c.length!==4){netMsg('4文字の部屋コードを入れてください。');return}
+  if(!hasPeer())return;
+  netMsg('部屋につないでいます…');
+  peer=new Peer();
+  const timer=setTimeout(()=>{if(!room)netMsg('部屋「'+c+'」につながりません。コードとホストの画面を確認してください。')},10000);
+  peer.on('open',()=>{
+    code=c;
+    hostConn=peer.connect(PREFIX+c,{reliable:true});
+    hostConn.on('data',m=>{if(m&&m.type==='state')clearTimeout(timer);onHostData(m)});
+    hostConn.on('close',onHostClose);
+  });
+  peer.on('disconnected',()=>{setTimeout(()=>{if(peer&&!peer.destroyed&&peer.disconnected)try{peer.reconnect()}catch(e){}},1000)});
+  peer.on('error',e=>{if(mode==='online'){if(e.type==='peer-unavailable'){flash('ホストが見つかりません。ホストの画面が開いているか確認してください。')}return}
+    netMsg(e.type==='peer-unavailable'?'部屋「'+c+'」が見つかりません。':'通信エラー（'+e.type+'）')});
+});
+
+function onHostData(m){
+  if(!m||m.type!=='state')return;
+  const prev=room&&room.round;
+  room=m.room;plays=m.plays||[];
+  if(!mode){mode='online';isHost=false;ls.set('picasso-room',code);netMsg('');showGame();keepAwake()}
+  else{if(prev&&prev!==room.round)onNewRound();render()}
+}
+let closeTimer=null;
+function onHostClose(){
+  if(mode!=='online')return;
+  flash('ホストとの接続が切れました。つなぎ直しています…');
+  clearTimeout(closeTimer);closeTimer=setTimeout(reconnectHost,1500);
+}
+function sit(i){
+  if(!room||(room.seats&&room.seats[i]))return;
+  active=i;faceUp.clear();
+  send({type:'sit',seat:i,name:nick()||('参加者'+(i+1))});
+}
+$('startBtn').addEventListener('click',()=>send({type:'start'}));
+$('leaveBtn').addEventListener('click',()=>{
+  try{peer&&peer.destroy()}catch(e){}
+  peer=null;conns=[];hostConn=null;isHost=false;
+  mode=null;room=null;plays=[];code=null;
+  $('game').hidden=true;$('setup').hidden=false;$('stats').hidden=true;
+});
+const saved=ls.get('picasso-room');if(saved)$('codeIn').value=saved;
+const hashCode=(location.hash||'').replace('#','').toUpperCase();
+if(/^[A-Z0-9]{4}$/.test(hashCode)){$('codeIn').value=hashCode;netMsg('部屋コード '+hashCode+' が入っています。ニックネームを入れて「参加する」を押してください。')}
+const canLink=/^https?:/.test(location.protocol);
+$('inviteBtn').addEventListener('click',async()=>{
+  const url=location.href.split('#')[0]+'#'+code;
+  try{await navigator.clipboard.writeText(url);$('inviteBtn').textContent='コピーしました'}
+  catch(e){$('roomMsg').textContent='招待リンク：'+url}
+  setTimeout(()=>{$('inviteBtn').textContent='招待リンクをコピー'},2000);
+});
+
+/* keep the phone awake while playing, and recover after the screen was off */
+let wake=null;
+async function keepAwake(){try{if('wakeLock' in navigator&&document.visibilityState==='visible'&&!wake){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>{wake=null})}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible'||mode!=='online')return;
+  keepAwake();
+  if(peer&&peer.disconnected&&!peer.destroyed){try{peer.reconnect()}catch(e){}}
+  if(!isHost&&(!hostConn||!hostConn.open))reconnectHost();
+});
+function reconnectHost(){
+  if(!peer||peer.destroyed||!code)return;
+  if(peer.disconnected){try{peer.reconnect()}catch(e){};setTimeout(reconnectHost,1500);return}
+  const c=peer.connect(PREFIX+code,{reliable:true});
+  c.on('open',()=>{hostConn=c;flash('再接続しました。')});
+  c.on('data',onHostData);
+  c.on('close',onHostClose);
+}
+</script>
+</body>
+</html>
